@@ -35,27 +35,50 @@ if ( ! class_exists( 'UploaderService' ) ) {
 
             $access_key_encrypted = $this->options['access_key'] ?? '';
             $secret_key_encrypted = $this->options['secret_key'] ?? '';
+            $decrypted_access_key = '';
+            $decrypted_secret_key = '';
 
-            $access_key_decrypted = !empty($access_key_encrypted) ? wp_decrypt_data( $access_key_encrypted ) : '';
-            $secret_key_decrypted = !empty($secret_key_encrypted) ? wp_decrypt_data( $secret_key_encrypted ) : '';
-
-            if ( empty( $this->options['endpoint'] ) || empty($access_key_decrypted) || empty($secret_key_decrypted) || empty( $this->options['bucket_name'] ) ) {
-                // Log this state if logger is available
-                if (class_exists('\HBucket\Logger')) {
-                    $logger = \HBucket\Logger::get_instance();
-                    if ($logger) $logger->warn("UploaderService: S3 client not configured due to missing credentials, endpoint, or bucket name.");
-                } else {
-                    error_log("UploaderService: S3 client not configured due to missing credentials, endpoint, or bucket name (Logger not available).");
+            if ( !empty($access_key_encrypted) ) {
+                $decrypted_access_key = wp_decrypt_data( $access_key_encrypted );
+                if ( false === $decrypted_access_key ) {
+                    $this->log_error("Failed to decrypt Access Key. WordPress decryption function failed. The key might be corrupted or encryption settings changed.");
+                    $decrypted_access_key = ''; // Treat as empty
+                } elseif ( !is_string($decrypted_access_key) ) {
+                     $this->log_error("Decrypted Access Key is not a string. Treating as empty.");
+                     $decrypted_access_key = ''; 
                 }
+            }
+
+            if ( !empty($secret_key_encrypted) ) {
+                $decrypted_secret_key = wp_decrypt_data( $secret_key_encrypted );
+                if ( false === $decrypted_secret_key ) {
+                    $this->log_error("Failed to decrypt Secret Key. WordPress decryption function failed. The key might be corrupted or encryption settings changed.");
+                    $decrypted_secret_key = ''; // Treat as empty
+                } elseif ( !is_string($decrypted_secret_key) ) {
+                    $this->log_error("Decrypted Secret Key is not a string. Treating as empty.");
+                    $decrypted_secret_key = '';
+                }
+            }
+
+            if ( empty( $this->options['endpoint'] ) || empty($decrypted_access_key) || empty($decrypted_secret_key) || empty( $this->options['bucket_name'] ) ) {
+                $this->log_error("S3 client not configured: missing endpoint, access key, secret key, or bucket name. Ensure credentials are correctly saved and decrypted.");
+                $this->s3_client = null; // Ensure it's null
                 return;
             }
             
-            $credentials = new Credentials( $access_key_decrypted, $secret_key_decrypted );
+            $credentials = null;
+            try {
+                $credentials = new Credentials( $decrypted_access_key, $decrypted_secret_key );
+            } catch ( \Exception $e ) {
+                $this->log_error("Error creating AWS Credentials object: " . $e->getMessage());
+                $this->s3_client = null;
+                return;
+            }
             
             $client_args = [
                 'version'     => 'latest',
                 'endpoint'    => esc_url_raw( $this->options['endpoint'] ),
-                'credentials' => $credentials,
+                'credentials' => $credentials, // Assign the new Credentials object here
                 'use_path_style_endpoint' => true,
             ];
 
@@ -69,8 +92,15 @@ if ( ! class_exists( 'UploaderService' ) ) {
 
             try {
                 $this->s3_client = new S3Client( $client_args );
+                // $this->log_error("S3 Client Initialized. Endpoint: {$client_args['endpoint']}"); // Debug log
+            } catch ( \Aws\Exception\CredentialsException $e ) {
+                $this->log_error("AWS Credentials Exception during S3 Client creation: " . $e->getMessage() . ". Check if keys are valid.");
+                $this->s3_client = null;
+            } catch ( \Aws\Exception\AwsException $e ) {
+                $this->log_error("AWS SDK Exception during S3 Client creation: " . $e->getMessage() . ". AWS Request ID: " . ($e->getAwsRequestId() ?: 'N/A'));
+                $this->s3_client = null;
             } catch ( \Exception $e ) {
-                error_log("H Bucket - S3 Client Init Error: " . $e->getMessage());
+                $this->log_error("General Exception during S3 Client creation: " . $e->getMessage());
                 $this->s3_client = null;
             }
         }
