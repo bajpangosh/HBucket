@@ -73,4 +73,14 @@ function h_bucket_init() {
 }
 add_action( 'plugins_loaded', 'h_bucket_init' );
 
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    // Ensure autoloader is available for HBucket namespace
+    if ( file_exists( H_BUCKET_PATH . 'vendor/autoload.php' ) ) {
+         require_once H_BUCKET_PATH . 'vendor/autoload.php';
+    }
+    // Load CLI commands class
+    if ( file_exists( H_BUCKET_PATH . 'includes/class-cli-commands.php' ) ) {
+        require_once H_BUCKET_PATH . 'includes/class-cli-commands.php';
+    }
+}
 ?>
