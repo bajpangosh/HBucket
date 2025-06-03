@@ -1,0 +1,20 @@
+{
+    "name": "kloudboy/h-bucket",
+    "description": "A WordPress plugin that offloads media files to Hetzner's S3-compatible Object Storage.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Bajpan Gosh",
+            "email": "email@example.com"
+        }
+    ],
+    "require": {
+        "aws/aws-sdk-php": "^3.200"
+    },
+    "autoload": {
+        "psr-4": {
+            "HBucket\\": "includes/"
+        }
+    }
+}

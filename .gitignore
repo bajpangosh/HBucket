@@ -1,0 +1,21 @@
+# Composer dependencies
+vendor/
+composer.lock
+
+# WordPress specific
+wp-content/
+wp-includes/
+wp-admin/
+wp-config.php
+*.log
+npm-debug.log
+yarn-error.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
