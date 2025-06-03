@@ -292,10 +292,46 @@ if ( ! class_exists( 'H_Bucket_Settings' ) ) {
                 $new_input['bucket_name'] = sanitize_text_field( $input['bucket_name'] );
             }
             if ( isset( $input['access_key'] ) ) {
-                $new_input['access_key'] = !empty($input['access_key']) ? wp_encrypt_data( sanitize_text_field( $input['access_key'] ) ) : '';
+                if ( !empty( $input['access_key'] ) ) {
+                    $encrypted_access_key = wp_encrypt_data( sanitize_text_field( $input['access_key'] ) );
+                    if ( false === $encrypted_access_key ) {
+                        if ( class_exists('\HBucket\Logger') ) {
+                            \HBucket\Logger::get_instance()->error("Failed to encrypt Access Key. WordPress encryption function failed.");
+                        } else {
+                            error_log("H Bucket Settings: Failed to encrypt Access Key.");
+                        }
+                        $new_input['access_key'] = ''; // Store empty if encryption fails
+                    } else {
+                        $new_input['access_key'] = $encrypted_access_key;
+                    }
+                } else {
+                    $new_input['access_key'] = ''; // Clear if submitted empty
+                }
+            } elseif ( isset( $this->options['access_key'] ) ) {
+                // If not in input (e.g. form section not submitted), retain existing value
+                $new_input['access_key'] = $this->options['access_key'];
             }
+
+
             if ( isset( $input['secret_key'] ) ) {
-                $new_input['secret_key'] = !empty($input['secret_key']) ? wp_encrypt_data( sanitize_text_field( $input['secret_key'] ) ) : '';
+                if ( !empty( $input['secret_key'] ) ) {
+                    $encrypted_secret_key = wp_encrypt_data( sanitize_text_field( $input['secret_key'] ) );
+                    if ( false === $encrypted_secret_key ) {
+                         if ( class_exists('\HBucket\Logger') ) {
+                            \HBucket\Logger::get_instance()->error("Failed to encrypt Secret Key. WordPress encryption function failed.");
+                        } else {
+                            error_log("H Bucket Settings: Failed to encrypt Secret Key.");
+                        }
+                        $new_input['secret_key'] = ''; // Store empty if encryption fails
+                    } else {
+                        $new_input['secret_key'] = $encrypted_secret_key;
+                    }
+                } else {
+                    $new_input['secret_key'] = ''; // Clear if submitted empty
+                }
+            } elseif ( isset( $this->options['secret_key'] ) ) {
+                // If not in input, retain existing value
+                $new_input['secret_key'] = $this->options['secret_key'];
             }
              if ( isset( $input['region'] ) ) {
                 $new_input['region'] = sanitize_text_field( $input['region'] );
