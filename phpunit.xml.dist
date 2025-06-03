@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.5/phpunit.xsd"
+    bootstrap="tests/phpunit/bootstrap.php"
+    backupGlobals="false"
+    colors="true"
+    convertErrorsToExceptions="true"
+    convertNoticesToExceptions="true"
+    convertWarningsToExceptions="true"
+    >
+    <testsuites>
+        <testsuite name="H Bucket Test Suite">
+            <directory suffix="-test.php">tests/phpunit/includes</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="WP_ENVIRONMENT_TYPE" value="local" />
+        <!-- User must set WP_TESTS_DIR environment variable or update path below -->
+        <env name="WP_TESTS_DIR" value="/tmp/wordpress-tests-lib" />
+    </php>
+    <coverage processUncoveredFiles="true">
+        <include>
+            <directory suffix=".php">./includes</directory>
+        </include>
+    </coverage>
+</phpunit>

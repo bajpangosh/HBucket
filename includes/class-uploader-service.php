@@ -33,11 +33,24 @@ if ( ! class_exists( 'UploaderService' ) ) {
         public function __construct() {
             $this->options = get_option( 'h_bucket_options' );
 
-            if ( empty( $this->options['endpoint'] ) || empty( $this->options['access_key'] ) || empty( $this->options['secret_key'] ) || empty( $this->options['bucket_name'] ) ) {
+            $access_key_encrypted = $this->options['access_key'] ?? '';
+            $secret_key_encrypted = $this->options['secret_key'] ?? '';
+
+            $access_key_decrypted = !empty($access_key_encrypted) ? wp_decrypt_data( $access_key_encrypted ) : '';
+            $secret_key_decrypted = !empty($secret_key_encrypted) ? wp_decrypt_data( $secret_key_encrypted ) : '';
+
+            if ( empty( $this->options['endpoint'] ) || empty($access_key_decrypted) || empty($secret_key_decrypted) || empty( $this->options['bucket_name'] ) ) {
+                // Log this state if logger is available
+                if (class_exists('\HBucket\Logger')) {
+                    $logger = \HBucket\Logger::get_instance();
+                    if ($logger) $logger->warn("UploaderService: S3 client not configured due to missing credentials, endpoint, or bucket name.");
+                } else {
+                    error_log("UploaderService: S3 client not configured due to missing credentials, endpoint, or bucket name (Logger not available).");
+                }
                 return;
             }
             
-            $credentials = new Credentials( $this->options['access_key'], $this->options['secret_key'] );
+            $credentials = new Credentials( $access_key_decrypted, $secret_key_decrypted );
             
             $client_args = [
                 'version'     => 'latest',
@@ -163,6 +176,76 @@ if ( ! class_exists( 'UploaderService' ) ) {
                 if ($logger) $logger->error("General Delete Exception for key {$s3_key}: " . $e->getMessage());
                 else error_log("H Bucket - General Delete Exception for key {$s3_key}: " . $e->getMessage());
                 return false;
+            }
+        }
+
+        /**
+         * Downloads an object from Hetzner Object Storage to a local file.
+         *
+         * @param string $s3_key The key of the object to download.
+         * @param string $destination_path The full path to save the downloaded file locally.
+         * @return bool True on success, false on failure.
+         */
+        public function download_object( $s3_key, $destination_path ) {
+            if ( ! $this->s3_client ) {
+                $this->log_error("Download Error: S3 client not initialized.");
+                return false;
+            }
+            if ( empty( $s3_key ) ) {
+                $this->log_error("Download Error: S3 key is empty.");
+                return false;
+            }
+            if ( empty( $destination_path ) ) {
+                $this->log_error("Download Error: Destination path is empty for S3 key {$s3_key}.");
+                return false;
+            }
+
+            // Ensure destination directory exists
+            $destination_dir = dirname( $destination_path );
+            if ( ! is_dir( $destination_dir ) ) {
+                if ( ! wp_mkdir_p( $destination_dir ) ) {
+                    $this->log_error("Download Error: Could not create destination directory {$destination_dir} for S3 key {$s3_key}.");
+                    return false;
+                }
+            }
+
+            $bucket_name = sanitize_text_field( $this->options['bucket_name'] );
+
+            try {
+                $result = $this->s3_client->getObject([
+                    'Bucket' => $bucket_name,
+                    'Key'    => $s3_key,
+                    'SaveAs' => $destination_path,
+                ]);
+                
+                // Check if getObject was successful (status code 200)
+                return ( isset( $result['@metadata']['statusCode'] ) && $result['@metadata']['statusCode'] == 200 );
+
+            } catch ( S3Exception $e ) {
+                $this->log_error("S3 Download Exception for key {$s3_key} to {$destination_path}: " . $e->getMessage());
+                // If file was partially saved by SaveAs on error, it might need cleanup, but S3 SDK usually handles this.
+                if (file_exists($destination_path) && filesize($destination_path) === 0) {
+                     @unlink($destination_path); // Clean up empty file on common error cases
+                }
+                return false;
+            } catch ( \Exception $e ) {
+                $this->log_error("General Download Exception for key {$s3_key} to {$destination_path}: " . $e->getMessage());
+                if (file_exists($destination_path) && filesize($destination_path) === 0) {
+                     @unlink($destination_path);
+                }
+                return false;
+            }
+        }
+
+        /**
+         * Helper to log errors consistently, using HBucket\Logger if available.
+         */
+        private function log_error($message) {
+            if (class_exists('\HBucket\Logger')) {
+                $logger = \HBucket\Logger::get_instance();
+                $logger->error($message);
+            } else {
+                error_log("H Bucket UploaderService: " . $message);
             }
         }
     }

@@ -161,6 +161,8 @@ if ( ! class_exists( 'H_Bucket_Settings' ) ) {
 
                                 if ($total_not_offloaded > 0) {
                                     echo '<h3>Start Migration</h3>';
+                                    // Add nonce for migration AJAX actions
+                                    wp_nonce_field( 'h_bucket_migration_nonce', 'h_bucket_migration_nonce_field' );
                                     echo '<p>Offload your existing media library to Hetzner Object Storage.</p>';
                                     echo '<button type="button" id="h-bucket-start-migration-button" class="button button-primary">Start Bulk Migration</button>';
                                     echo '<div id="h-bucket-migration-progress-bar" style="width:100%; background-color:#ddd; margin-top:10px; display:none;"><div style="width:0%; height:20px; background-color:green; text-align:center; color:white;">0%</div></div>';
@@ -290,11 +292,10 @@ if ( ! class_exists( 'H_Bucket_Settings' ) ) {
                 $new_input['bucket_name'] = sanitize_text_field( $input['bucket_name'] );
             }
             if ( isset( $input['access_key'] ) ) {
-                $new_input['access_key'] = sanitize_text_field( $input['access_key'] );
+                $new_input['access_key'] = !empty($input['access_key']) ? wp_encrypt_data( sanitize_text_field( $input['access_key'] ) ) : '';
             }
             if ( isset( $input['secret_key'] ) ) {
-                // This will be encrypted later. For now, just sanitize.
-                $new_input['secret_key'] = sanitize_text_field( $input['secret_key'] );
+                $new_input['secret_key'] = !empty($input['secret_key']) ? wp_encrypt_data( sanitize_text_field( $input['secret_key'] ) ) : '';
             }
              if ( isset( $input['region'] ) ) {
                 $new_input['region'] = sanitize_text_field( $input['region'] );
@@ -339,16 +340,24 @@ if ( ! class_exists( 'H_Bucket_Settings' ) ) {
             );
         }
          public function access_key_callback() {
+            $value = (isset($this->options['access_key']) && !empty($this->options['access_key'])) ? '********' : '';
             printf(
-                '<input type="text" id="access_key" name="h_bucket_options[access_key]" value="%s" class="regular-text"/>',
-                isset( $this->options['access_key'] ) ? esc_attr( $this->options['access_key'] ) : ''
+                '<input type="text" id="access_key" name="h_bucket_options[access_key]" value="%s" class="regular-text" placeholder="Leave blank to keep current value"/>',
+                $value // Show placeholder text, not the encrypted key.
             );
+            if (!empty($this->options['access_key'])) {
+                echo '<p class="description">A key is currently saved. To change it, enter a new key. To clear it, submit an empty field (requires re-saving).</p>';
+            }
         }
         public function secret_key_callback() {
+            $value = (isset($this->options['secret_key']) && !empty($this->options['secret_key'])) ? '********' : '';
             printf(
-                '<input type="password" id="secret_key" name="h_bucket_options[secret_key]" value="%s" class="regular-text"/>',
-                isset( $this->options['secret_key'] ) ? esc_attr( $this->options['secret_key'] ) : '' // Later this will be a placeholder like '********' if set
+                '<input type="password" id="secret_key" name="h_bucket_options[secret_key]" value="%s" class="regular-text" placeholder="Leave blank to keep current value"/>',
+                $value // Show placeholder
             );
+             if (!empty($this->options['secret_key'])) {
+                echo '<p class="description">A secret key is currently saved (encrypted). To change it, enter a new key. To clear it, submit an empty field (requires re-saving).</p>';
+            }
         }
          public function region_callback() {
             printf(
